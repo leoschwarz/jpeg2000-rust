@@ -1,4 +1,5 @@
 extern crate image;
+extern crate libc;
 extern crate openjp2_sys;
 
 pub use self::image::{ImageResult, DynamicImage};

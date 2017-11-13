@@ -5,5 +5,6 @@ authors = ["Leo Schwarz <mail@leoschwarz.com>"]
 
 [dependencies]
 image = "0.17.0"
+libc = "0.2.33"
 openjp2-sys = { path = "openjp2-sys" }
 

@@ -1,5 +1,6 @@
 #include "openjpeg.h"
 
+/*
 // returns 0 on success, positive error number otherwise.
 // codec_in = OPJ_CODEC_J2K or OPJ_CODEC_JP2 or ...
 // TODO: output struct
@@ -33,7 +34,6 @@ int wrapper_read_buffer(char *data_in, int data_len, int codec_in) {
         return 3;
     }
 
-
-
     return 0;
 }
+*/
