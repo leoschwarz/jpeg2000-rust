@@ -2,12 +2,8 @@
 name = "openjpeg2000"
 version = "0.1.0"
 authors = ["Leo Schwarz <mail@leoschwarz.com>"]
-build = "build.rs"
 
 [dependencies]
 image = "0.17.0"
+openjp2-sys = { path = "openjp2-sys" }
 
-[build-dependencies]
-bindgen = "0.31.3"
-cmake = "0.1.27"
-gcc = "0.3.54"

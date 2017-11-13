@@ -1,9 +1,15 @@
-pub mod binding;
+extern crate image;
+extern crate openjp2_sys;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
+pub use self::image::{ImageResult, DynamicImage};
+
+pub mod decode;
+
+/*
+pub fn load_from_memory(buffer: &[u8], codec: Codec) -> ImageResult<DynamicImage> {
+    
+
+    unimplemented!()
 }
+
+*/

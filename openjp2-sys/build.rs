@@ -36,6 +36,8 @@ fn main() {
         .header("wrapper.h")
         // issue: https://github.com/rust-lang-nursery/rust-bindgen/issues/1120
         .rustfmt_bindings(false)
+        // issue: https://github.com/rust-lang-nursery/rust-bindgen/issues/348
+        .clang_arg("-fno-inline-functions")
         .clang_arg(format!("-I{}", include_dir.to_string_lossy()))
         .generate()
         .unwrap();
