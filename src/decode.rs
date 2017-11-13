@@ -1,4 +1,4 @@
-use openjp2_sys as binding;
+use openjp2_sys as ffi;
 use std::os::raw::{c_char, c_void};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -13,24 +13,28 @@ pub enum Codec {
 impl Codec {
     fn to_i32(&self) -> i32 {
         match *self {
-            Codec::J2K => binding::CODEC_FORMAT_OPJ_CODEC_J2K,
-            Codec::JP2 => binding::CODEC_FORMAT_OPJ_CODEC_JP2,
-            Codec::JPP => binding::CODEC_FORMAT_OPJ_CODEC_JPP,
-            Codec::JPT => binding::CODEC_FORMAT_OPJ_CODEC_JPT,
-            Codec::JPX => binding::CODEC_FORMAT_OPJ_CODEC_JPX,
+            Codec::J2K => ffi::CODEC_FORMAT_OPJ_CODEC_J2K,
+            Codec::JP2 => ffi::CODEC_FORMAT_OPJ_CODEC_JP2,
+            Codec::JPP => ffi::CODEC_FORMAT_OPJ_CODEC_JPP,
+            Codec::JPT => ffi::CODEC_FORMAT_OPJ_CODEC_JPT,
+            Codec::JPX => ffi::CODEC_FORMAT_OPJ_CODEC_JPX,
         }
     }
 }
 
 //#[link(name="openjp2")]
-pub fn load_from_memory(buffer: &mut [u8], codec: Codec) {
+pub fn load_from_memory(buf: &mut [u8], codec: Codec) {
     unsafe {
+        // Setup the stream.
+        let c_stream = ffi::opj_stream_create(buf.len(), 1);
+
+
         //let output: Vec<u8> = Vec::new(); // TODO how will this work!?
-        binding::wrapper_read_buffer(buffer.as_mut_ptr() as *mut c_char, buffer.len() as i32, codec.to_i32());
+        //ffi::wrapper_read_buffer(buffer.as_mut_ptr() as *mut c_char, buffer.len() as i32, codec.to_i32());
 
         /*
-        let stream = binding::opj_stream_create(buffer.len(), 1);
-        binding::opj_stream_set_user_data(stream, buffer.as_mut_ptr() as *mut c_void, None);
+        let stream = ffi::opj_stream_create(buffer.len(), 1);
+        ffi::opj_stream_set_user_data(stream, buffer.as_mut_ptr() as *mut c_void, None);
         */
     }
 }
