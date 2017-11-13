@@ -1,5 +1,5 @@
 [package]
-name = "openjpeg2000"
+name = "jpeg2000"
 version = "0.1.0"
 authors = ["Leo Schwarz <mail@leoschwarz.com>"]
 
