@@ -45,6 +45,8 @@ fn main() {
         .generate()
         .unwrap();
 
+
+
     // Write bindings to $OUT_DIR/bindings.rs
     bindings
         .write_to_file(out_path.join("bindings.rs"))
