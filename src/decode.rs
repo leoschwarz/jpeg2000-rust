@@ -4,6 +4,9 @@ use std::ptr::{null, null_mut};
 use std::mem;
 use std::ffi::CString;
 use libc;
+use image::DynamicImage;
+use image::GenericImage;
+use image;
 
 // TODO: in the future remove all mem::uninitialized and mem::zeroed from this crate,
 // I use these as it's quicker to get something running, but they might end up sneaking UB
@@ -95,7 +98,7 @@ unsafe fn get_default_decoder_parameters() -> ffi::opj_dparameters {
     jp2_dparams
 }
 
-pub fn load_from_memory(buf: &mut [u8], codec: Codec) -> Result<(), Error> {
+pub fn load_from_memory(buf: &mut [u8], codec: Codec) -> Result<DynamicImage, Error> {
     println!("buf.len() = {}", buf.len());
 
     unsafe {
@@ -140,21 +143,81 @@ pub fn load_from_memory(buf: &mut [u8], codec: Codec) -> Result<(), Error> {
         //ffi::opj_image_destroy(jp2_image);
         //libc::free(jp2_image as *mut libc::c_void);
 
-        if !jp2_image.is_null() {
-            let color_space = ColorSpace::from_i32((*jp2_image).color_space);
-
-            let width = (*jp2_image).x1 - (*jp2_image).x0;
-            let height = (*jp2_image).y1 - (*jp2_image).y0;
-
-            println!("width: {}, height: {}", width, height);
-
-            println!("numcomps: {}", (*jp2_image).numcomps);
-            println!("comps: {:?}", (*jp2_image).comps);
-            // TODO: how to deal with unspecified color space?
-            println!("color_space: {:?}", color_space);
-            println!("icc_profile_len: {}", (*jp2_image).icc_profile_len);
+        if jp2_image.is_null() {
+            panic!("error handling missing");
         }
 
-        Ok(())
+        ffi::opj_decode(jp2_codec, jp2_stream, jp2_image);
+
+        let color_space = ColorSpace::from_i32((*jp2_image).color_space);
+
+        let width = (*jp2_image).x1 - (*jp2_image).x0;
+        let height = (*jp2_image).y1 - (*jp2_image).y0;
+
+        println!("width: {}, height: {}", width, height);
+
+        // TODO: how to deal with unspecified color space?
+        println!("color_space: {:?}", color_space);
+        println!("icc_profile_len: {}", (*jp2_image).icc_profile_len);
+        println!("numcomps: {}", (*jp2_image).numcomps);
+
+        let mut comps: Vec<*mut ffi::opj_image_comp> = Vec::new();
+        let comps_len = (*jp2_image).numcomps;
+        for i in 0..comps_len {
+            comps.push((*jp2_image).comps.offset(i as isize));
+        }
+        println!("comps.len() = {}", comps.len());
+
+        let mut jp2_info: *mut c_void = mem::zeroed();
+        //ffi::opj_get_cstr_info(&mut jp2_info);
+
+        assert!(comps.len() == 4);
+        let mut image = DynamicImage::new_rgba8(width, height);
+
+        // Copy the pixels.
+        for y in 0..height {
+            for x in 0..width {
+                let index = (x + y * width) as isize;
+
+                /*
+                let data0 = (*comps[0]).data as *mut u8;
+                let data1 = (*comps[1]).data as *mut u8;
+                let data2 = (*comps[2]).data as *mut u8;
+                let data3 = (*comps[3]).data as *mut u8;
+                */
+                let mut values = [0u8, 0, 0, 0];
+                for i in 0..4 {
+                    //let data = (*comps[i]).data as *mut u8;
+                    let data = (*comps[i]).data;
+                    assert!((*comps[i]).sgnd == 0); // TODO signed numbers?!
+                    let ivalue: u8 = *data.offset(index) as u8;
+                    values[i] = ivalue;
+                }
+
+                image.unsafe_put_pixel(
+                    x,
+                    y,
+                    image::Rgba {
+                        data: values,
+                        /*
+                        data: [
+                            *data0.offset(index),
+                            *data1.offset(index),
+                            *data2.offset(index),
+                            *data3.offset(index),
+                            /*
+                            *(*comps[0]).data.offset(index) as u8,
+                            *(*comps[1]).data.offset(index) as u8,
+                            *(*comps[2]).data.offset(index) as u8,
+                            *(*comps[3]).data.offset(index) as u8,
+                            */
+                        ],
+                        */
+                    },
+                )
+            }
+        }
+
+        Ok(image)
     }
 }
