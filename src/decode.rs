@@ -43,8 +43,30 @@ pub enum Error {
     ReadHeader,
 }
 
+/// This is the type only describing the actual ColorSpaces and doesn't allow for the `Unknown` and
+/// `Unspecified` variant.
 #[derive(Debug)]
 enum ColorSpace {
+    CMYK,
+    EYCC,
+    GRAY,
+    SRGB,
+    SYCC,
+}
+
+/*
+impl ColorSpace {
+    fn num_comps(&self) -> Vec<usize> {
+        match *self {
+            ColorSpace::
+        }
+    }
+}
+*/
+
+/// This is a type used for decoding the color space type as provided by the C API.
+#[derive(Debug)]
+enum ColorSpaceValue {
     CMYK,
     EYCC,
     GRAY,
@@ -54,17 +76,17 @@ enum ColorSpace {
     Unspecified,
 }
 
-impl ColorSpace {
+impl ColorSpaceValue {
     fn from_i32(val: i32) -> Self {
         match val {
-            ffi::COLOR_SPACE_OPJ_CLRSPC_CMYK => ColorSpace::CMYK,
-            ffi::COLOR_SPACE_OPJ_CLRSPC_EYCC => ColorSpace::EYCC,
-            ffi::COLOR_SPACE_OPJ_CLRSPC_GRAY => ColorSpace::GRAY,
-            ffi::COLOR_SPACE_OPJ_CLRSPC_SRGB => ColorSpace::SRGB,
-            ffi::COLOR_SPACE_OPJ_CLRSPC_SYCC => ColorSpace::SYCC,
-            ffi::COLOR_SPACE_OPJ_CLRSPC_UNKNOWN => ColorSpace::Unknown(val),
-            ffi::COLOR_SPACE_OPJ_CLRSPC_UNSPECIFIED => ColorSpace::Unspecified,
-            _ => ColorSpace::Unknown(val),
+            ffi::COLOR_SPACE_OPJ_CLRSPC_CMYK => ColorSpaceValue::CMYK,
+            ffi::COLOR_SPACE_OPJ_CLRSPC_EYCC => ColorSpaceValue::EYCC,
+            ffi::COLOR_SPACE_OPJ_CLRSPC_GRAY => ColorSpaceValue::GRAY,
+            ffi::COLOR_SPACE_OPJ_CLRSPC_SRGB => ColorSpaceValue::SRGB,
+            ffi::COLOR_SPACE_OPJ_CLRSPC_SYCC => ColorSpaceValue::SYCC,
+            ffi::COLOR_SPACE_OPJ_CLRSPC_UNKNOWN => ColorSpaceValue::Unknown(val),
+            ffi::COLOR_SPACE_OPJ_CLRSPC_UNSPECIFIED => ColorSpaceValue::Unspecified,
+            _ => ColorSpaceValue::Unknown(val),
         }
     }
 }
@@ -98,126 +120,111 @@ unsafe fn get_default_decoder_parameters() -> ffi::opj_dparameters {
     jp2_dparams
 }
 
-pub fn load_from_memory(buf: &mut [u8], codec: Codec) -> Result<DynamicImage, Error> {
-    println!("buf.len() = {}", buf.len());
+// jp2_stream: this function will take care of deleting its ressources in all cases.
+unsafe fn load_from_stream(
+    jp2_stream: *mut *mut c_void,
+    codec: Codec,
+) -> Result<DynamicImage, Error> {
+    // Setup the decoder.
+    let jp2_codec = ffi::opj_create_decompress(codec.to_i32());
+    if jp2_codec.is_null() {
+        ffi::opj_stream_destroy(jp2_stream);
+        return Err(Error::InvalidCodec);
+    }
+    let mut jp2_dparams = get_default_decoder_parameters();
+    if ffi::opj_setup_decoder(jp2_codec, &mut jp2_dparams) != 1 {
+        ffi::opj_stream_destroy(jp2_stream);
+        ffi::opj_destroy_codec(jp2_codec);
+        return Err(Error::DecoderSetup);
+    }
 
-    unsafe {
-        // Setup the stream.
-        /*
-        TODO: stream creation seems to be the issue.
-        let jp2_stream = ffi::opj_stream_default_create(1);
-        ffi::opj_stream_set_user_data(jp2_stream, buf.as_mut_ptr() as *mut c_void, None);
-        ffi::opj_stream_set_user_data_length(jp2_stream, buf.len() as u64);
-        */
-        let fname = CString::new("./examples/rust-logo-512x512-blk.jp2").unwrap();
-        let jp2_stream = ffi::opj_stream_create_default_file_stream(fname.as_ptr(), 1);
+    // Set quiet callbacks.
+    ffi::opj_set_info_handler(jp2_codec, Some(quiet_callback), null_mut());
+    ffi::opj_set_warning_handler(jp2_codec, Some(quiet_callback), null_mut());
+    ffi::opj_set_error_handler(jp2_codec, Some(quiet_callback), null_mut());
 
-        // Setup the decoder.
-        let jp2_codec = ffi::opj_create_decompress(codec.to_i32());
-        if jp2_codec.is_null() {
-            ffi::opj_stream_destroy(jp2_stream);
-            return Err(Error::InvalidCodec);
-        }
-        let mut jp2_dparams = get_default_decoder_parameters();
-        if ffi::opj_setup_decoder(jp2_codec, &mut jp2_dparams) != 1 {
-            ffi::opj_stream_destroy(jp2_stream);
-            ffi::opj_destroy_codec(jp2_codec);
-            return Err(Error::DecoderSetup);
-        }
+    // Read header.
+    let mut jp2_image: *mut ffi::opj_image = mem::zeroed();
 
-        // Set quiet callbacks.
-        ffi::opj_set_info_handler(jp2_codec, Some(quiet_callback), null_mut());
-        ffi::opj_set_warning_handler(jp2_codec, Some(quiet_callback), null_mut());
-        ffi::opj_set_error_handler(jp2_codec, Some(quiet_callback), null_mut());
-
-        // Read header.
-        let mut jp2_image: *mut ffi::opj_image = mem::zeroed();
-
-        if ffi::opj_read_header(jp2_stream, jp2_codec, &mut jp2_image) != 1 {
-            ffi::opj_stream_destroy(jp2_stream);
-            ffi::opj_destroy_codec(jp2_codec);
-            //ffi::opj_image_destroy(jp2_image);
-            //libc::free(jp2_image as *mut libc::c_void);
-            return Err(Error::ReadHeader);
-        }
+    if ffi::opj_read_header(jp2_stream, jp2_codec, &mut jp2_image) != 1 {
+        ffi::opj_stream_destroy(jp2_stream);
+        ffi::opj_destroy_codec(jp2_codec);
         //ffi::opj_image_destroy(jp2_image);
         //libc::free(jp2_image as *mut libc::c_void);
+        return Err(Error::ReadHeader);
+    }
+    //ffi::opj_image_destroy(jp2_image);
+    //libc::free(jp2_image as *mut libc::c_void);
 
-        if jp2_image.is_null() {
-            panic!("error handling missing");
-        }
+    if jp2_image.is_null() {
+        panic!("error handling missing");
+    }
 
-        ffi::opj_decode(jp2_codec, jp2_stream, jp2_image);
+    ffi::opj_decode(jp2_codec, jp2_stream, jp2_image);
 
-        let color_space = ColorSpace::from_i32((*jp2_image).color_space);
+    let color_space = ColorSpaceValue::from_i32((*jp2_image).color_space);
 
-        let width = (*jp2_image).x1 - (*jp2_image).x0;
-        let height = (*jp2_image).y1 - (*jp2_image).y0;
+    let width = (*jp2_image).x1 - (*jp2_image).x0;
+    let height = (*jp2_image).y1 - (*jp2_image).y0;
 
-        println!("width: {}, height: {}", width, height);
+    println!("width: {}, height: {}", width, height);
 
-        // TODO: how to deal with unspecified color space?
-        println!("color_space: {:?}", color_space);
-        println!("icc_profile_len: {}", (*jp2_image).icc_profile_len);
-        println!("numcomps: {}", (*jp2_image).numcomps);
+    // TODO: how to deal with unspecified color space?
+    println!("color_space: {:?}", color_space);
+    println!("icc_profile_len: {}", (*jp2_image).icc_profile_len);
+    println!("numcomps: {}", (*jp2_image).numcomps);
 
-        let mut comps: Vec<*mut ffi::opj_image_comp> = Vec::new();
-        let comps_len = (*jp2_image).numcomps;
-        for i in 0..comps_len {
-            comps.push((*jp2_image).comps.offset(i as isize));
-        }
-        println!("comps.len() = {}", comps.len());
+    let mut comps: Vec<*mut ffi::opj_image_comp> = Vec::new();
+    let comps_len = (*jp2_image).numcomps;
+    for i in 0..comps_len {
+        comps.push((*jp2_image).comps.offset(i as isize));
+    }
+    println!("comps.len() = {}", comps.len());
 
-        let mut jp2_info: *mut c_void = mem::zeroed();
-        //ffi::opj_get_cstr_info(&mut jp2_info);
+    let mut jp2_info: *mut c_void = mem::zeroed();
+    //ffi::opj_get_cstr_info(&mut jp2_info);
 
-        assert!(comps.len() == 4);
-        let mut image = DynamicImage::new_rgba8(width, height);
+    assert!(comps.len() == 4);
+    let mut image = DynamicImage::new_rgba8(width, height);
 
-        // Copy the pixels.
-        for y in 0..height {
-            for x in 0..width {
-                let index = (x + y * width) as isize;
+    // Copy the pixels.
+    for y in 0..height {
+        for x in 0..width {
+            let index = (x + y * width) as isize;
 
-                /*
-                let data0 = (*comps[0]).data as *mut u8;
-                let data1 = (*comps[1]).data as *mut u8;
-                let data2 = (*comps[2]).data as *mut u8;
-                let data3 = (*comps[3]).data as *mut u8;
-                */
-                let mut values = [0u8, 0, 0, 0];
-                for i in 0..4 {
-                    //let data = (*comps[i]).data as *mut u8;
-                    let data = (*comps[i]).data;
-                    assert!((*comps[i]).sgnd == 0); // TODO signed numbers?!
-                    let ivalue: u8 = *data.offset(index) as u8;
-                    values[i] = ivalue;
-                }
-
-                image.unsafe_put_pixel(
-                    x,
-                    y,
-                    image::Rgba {
-                        data: values,
-                        /*
-                        data: [
-                            *data0.offset(index),
-                            *data1.offset(index),
-                            *data2.offset(index),
-                            *data3.offset(index),
-                            /*
-                            *(*comps[0]).data.offset(index) as u8,
-                            *(*comps[1]).data.offset(index) as u8,
-                            *(*comps[2]).data.offset(index) as u8,
-                            *(*comps[3]).data.offset(index) as u8,
-                            */
-                        ],
-                        */
-                    },
-                )
+            let mut values = [0u8, 0, 0, 0];
+            for i in 0..4 {
+                let data = (*comps[i]).data;
+                assert!((*comps[i]).sgnd == 0); // TODO signed numbers?!
+                let ivalue: u8 = *data.offset(index) as u8;
+                values[i] = ivalue;
             }
-        }
 
-        Ok(image)
+            image.unsafe_put_pixel(x, y, image::Rgba { data: values })
+        }
+    }
+
+    Ok(image)
+
+}
+
+/*
+// TODO: Apparently this is still missing https://github.com/uclouvain/openjpeg/issues/972
+pub fn load_from_memory(buf: &mut [u8], codec: Codec) -> Result<DynamicImage, Error> {
+    unsafe {
+        let jp2_stream = ffi::opj_stream_create(buf.len(), 1);
+        //ffi::opj_stream_set_user_data_length(jp2_stream, buf.len() as u64);
+        ffi::opj_stream_set_user_data(jp2_stream, buf.as_mut_ptr() as *mut c_void, None);
+        ffi::opj_stream_set_read_function(jp2_stream, Some(full_read_buf));
+        load_from_stream(jp2_stream, codec)
+    }
+}
+*/
+
+// TODO: docs
+pub fn load_from_file(fname: CString, codec: Codec) -> Result<DynamicImage, Error> {
+    unsafe {
+        let jp2_stream = ffi::opj_stream_create_default_file_stream(fname.as_ptr(), 1);
+        load_from_stream(jp2_stream, codec)
     }
 }
