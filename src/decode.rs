@@ -8,6 +8,8 @@ use image::DynamicImage;
 use image::GenericImage;
 use image;
 
+use error::DecodeError;
+
 // TODO: in the future remove all mem::uninitialized and mem::zeroed from this crate,
 // I use these as it's quicker to get something running, but they might end up sneaking UB
 // into our code.
@@ -31,16 +33,6 @@ impl Codec {
             Codec::JPX => ffi::CODEC_FORMAT_OPJ_CODEC_JPX,
         }
     }
-}
-
-#[derive(Debug)]
-pub enum Error {
-    /// Invalid codec was selected.
-    InvalidCodec,
-    /// Something went wrong setting up the decoder.
-    DecoderSetup,
-    /// Reading the header failed.
-    ReadHeader,
 }
 
 /// This is the type only describing the actual ColorSpaces and doesn't allow for the `Unknown` and
@@ -124,18 +116,18 @@ unsafe fn get_default_decoder_parameters() -> ffi::opj_dparameters {
 unsafe fn load_from_stream(
     jp2_stream: *mut *mut c_void,
     codec: Codec,
-) -> Result<DynamicImage, Error> {
+) -> Result<DynamicImage, DecodeError> {
     // Setup the decoder.
     let jp2_codec = ffi::opj_create_decompress(codec.to_i32());
     if jp2_codec.is_null() {
         ffi::opj_stream_destroy(jp2_stream);
-        return Err(Error::InvalidCodec);
+        return Err(DecodeError::FfiError("Codec instantiation failed."));
     }
     let mut jp2_dparams = get_default_decoder_parameters();
     if ffi::opj_setup_decoder(jp2_codec, &mut jp2_dparams) != 1 {
         ffi::opj_stream_destroy(jp2_stream);
         ffi::opj_destroy_codec(jp2_codec);
-        return Err(Error::DecoderSetup);
+        return Err(DecodeError::FfiError("Setting up the decoder failed."));
     }
 
     // Set quiet callbacks.
@@ -151,13 +143,13 @@ unsafe fn load_from_stream(
         ffi::opj_destroy_codec(jp2_codec);
         //ffi::opj_image_destroy(jp2_image);
         //libc::free(jp2_image as *mut libc::c_void);
-        return Err(Error::ReadHeader);
+        return Err(DecodeError::ReadHeader);
     }
     //ffi::opj_image_destroy(jp2_image);
     //libc::free(jp2_image as *mut libc::c_void);
 
     if jp2_image.is_null() {
-        panic!("error handling missing");
+        return Err(DecodeError::FfiError("jp2_image pointer is null even though success was reported"));
     }
 
     ffi::opj_decode(jp2_codec, jp2_stream, jp2_image);
@@ -210,7 +202,7 @@ unsafe fn load_from_stream(
 
 /*
 // TODO: Apparently this is still missing https://github.com/uclouvain/openjpeg/issues/972
-pub fn load_from_memory(buf: &mut [u8], codec: Codec) -> Result<DynamicImage, Error> {
+pub fn load_from_memory(buf: &mut [u8], codec: Codec) -> Result<DynamicImage, DecodeError> {
     unsafe {
         let jp2_stream = ffi::opj_stream_create(buf.len(), 1);
         //ffi::opj_stream_set_user_data_length(jp2_stream, buf.len() as u64);
@@ -222,7 +214,7 @@ pub fn load_from_memory(buf: &mut [u8], codec: Codec) -> Result<DynamicImage, Er
 */
 
 // TODO: docs
-pub fn load_from_file(fname: CString, codec: Codec) -> Result<DynamicImage, Error> {
+pub fn load_from_file(fname: CString, codec: Codec) -> Result<DynamicImage, DecodeError> {
     unsafe {
         let jp2_stream = ffi::opj_stream_create_default_file_stream(fname.as_ptr(), 1);
         load_from_stream(jp2_stream, codec)
