@@ -7,4 +7,11 @@ pub enum DecodeError {
     /// Reading the header failed for some reason.
     ReadHeader,
 
+    /// There were too many components in the supplied file.
+    /// If it was a valid file this is a bug in the crate too.
+    TooManyComponents(usize),
+
+    // TODO: This should not be a problem in the future.
+    UnspecifiedColorSpace,
+    UnknownColorSpace,
 }

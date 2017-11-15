@@ -13,9 +13,10 @@ fn main() {
 
     let img = jpeg2000::decode::load_from_file(
         CString::new("./examples/rust-logo-512x512-blk.jp2").unwrap(),
+        //CString::new("./examples/relax.jp2").unwrap(),
         Codec::JP2,
     ).unwrap();
 
     let mut output = File::create("result.png").unwrap();
-    img.save(&mut output, image::ImageFormat::PNG);
+    let _ = img.save(&mut output, image::ImageFormat::PNG);
 }

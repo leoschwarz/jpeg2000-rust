@@ -1,14 +1,13 @@
 use openjp2_sys as ffi;
-use std::os::raw::{c_char, c_void, c_int};
-use std::ptr::{null, null_mut};
-use std::mem;
+use std::os::raw::c_void;
+use std::ptr::null_mut;
 use std::ffi::CString;
-use libc;
-use image::DynamicImage;
-use image::GenericImage;
-use image;
+use image::{DynamicImage, GenericImage};
 
 use error::DecodeError;
+
+mod color_convert;
+use self::color_convert::{ColorSpace, ColorSpaceValue};
 
 // TODO: in the future remove all mem::uninitialized and mem::zeroed from this crate,
 // I use these as it's quicker to get something running, but they might end up sneaking UB
@@ -35,38 +34,6 @@ impl Codec {
     }
 }
 
-/// This is the type only describing the actual ColorSpaces and doesn't allow for the `Unknown` and
-/// `Unspecified` variant.
-#[derive(Debug)]
-enum ColorSpace {
-    CMYK,
-    EYCC,
-    GRAY,
-    SRGB,
-    SYCC,
-}
-
-/*
-impl ColorSpace {
-    fn num_comps(&self) -> Vec<usize> {
-        match *self {
-            ColorSpace::
-        }
-    }
-}
-*/
-
-/// This is a type used for decoding the color space type as provided by the C API.
-#[derive(Debug)]
-enum ColorSpaceValue {
-    CMYK,
-    EYCC,
-    GRAY,
-    SRGB,
-    SYCC,
-    Unknown(i32),
-    Unspecified,
-}
 
 impl ColorSpaceValue {
     fn from_i32(val: i32) -> Self {
@@ -83,10 +50,11 @@ impl ColorSpaceValue {
     }
 }
 
+/*
 extern "C" fn quiet_callback(_: *const c_char, _: *mut c_void) {}
+*/
 
 unsafe fn get_default_decoder_parameters() -> ffi::opj_dparameters {
-    /*
     let mut jp2_dparams = ffi::opj_dparameters {
         cp_reduce: 0,
         cp_layer: 0,
@@ -106,13 +74,11 @@ unsafe fn get_default_decoder_parameters() -> ffi::opj_dparameters {
         jpwl_max_tiles: 0,
         flags: 0,
     };
-    */
-    let mut jp2_dparams = mem::zeroed();
     ffi::opj_set_default_decoder_parameters(&mut jp2_dparams);
     jp2_dparams
 }
 
-// jp2_stream: this function will take care of deleting its ressources in all cases.
+// jp2_stream: this function will take care of deleting this at the end.
 unsafe fn load_from_stream(
     jp2_stream: *mut *mut c_void,
     codec: Codec,
@@ -130,53 +96,74 @@ unsafe fn load_from_stream(
         return Err(DecodeError::FfiError("Setting up the decoder failed."));
     }
 
+    /*
     // Set quiet callbacks.
     ffi::opj_set_info_handler(jp2_codec, Some(quiet_callback), null_mut());
     ffi::opj_set_warning_handler(jp2_codec, Some(quiet_callback), null_mut());
     ffi::opj_set_error_handler(jp2_codec, Some(quiet_callback), null_mut());
+    */
 
     // Read header.
-    let mut jp2_image: *mut ffi::opj_image = mem::zeroed();
-
+    let mut jp2_image: *mut ffi::opj_image = &mut ffi::opj_image {
+        x0: 0,
+        y0: 0,
+        x1: 0,
+        y1: 0,
+        numcomps: 0,
+        color_space: 0,
+        comps: null_mut(),
+        icc_profile_buf: null_mut(),
+        icc_profile_len: 0,
+    };
     if ffi::opj_read_header(jp2_stream, jp2_codec, &mut jp2_image) != 1 {
         ffi::opj_stream_destroy(jp2_stream);
         ffi::opj_destroy_codec(jp2_codec);
-        //ffi::opj_image_destroy(jp2_image);
-        //libc::free(jp2_image as *mut libc::c_void);
         return Err(DecodeError::ReadHeader);
     }
-    //ffi::opj_image_destroy(jp2_image);
-    //libc::free(jp2_image as *mut libc::c_void);
 
-    if jp2_image.is_null() {
-        return Err(DecodeError::FfiError("jp2_image pointer is null even though success was reported"));
-    }
-
+    // Decode the image.
     ffi::opj_decode(jp2_codec, jp2_stream, jp2_image);
 
-    let color_space = ColorSpaceValue::from_i32((*jp2_image).color_space);
+    let color_space_raw = ColorSpaceValue::from_i32((*jp2_image).color_space);
+    let color_space = color_space_raw.determined();
+    if color_space.is_none() {
+        // TODO: how to deal with unspecified color space?
+        ffi::opj_stream_destroy(jp2_stream);
+        ffi::opj_destroy_codec(jp2_codec);
+        ffi::opj_image_destroy(jp2_image);
+        if color_space_raw == ColorSpaceValue::Unspecified {
+            return Err(DecodeError::UnspecifiedColorSpace);
+        } else {
+            return Err(DecodeError::UnknownColorSpace);
+        }
+    }
+    let color_space: ColorSpace = color_space.unwrap();
 
     let width = (*jp2_image).x1 - (*jp2_image).x0;
     let height = (*jp2_image).y1 - (*jp2_image).y0;
 
-    println!("width: {}, height: {}", width, height);
+    //println!("width: {}, height: {}", width, height);
 
-    // TODO: how to deal with unspecified color space?
-    println!("color_space: {:?}", color_space);
-    println!("icc_profile_len: {}", (*jp2_image).icc_profile_len);
-    println!("numcomps: {}", (*jp2_image).numcomps);
+    //println!("color_space: {:?}", color_space);
+    //println!("icc_profile_len: {}", (*jp2_image).icc_profile_len);
+    //println!("numcomps: {}", (*jp2_image).numcomps);
 
     let mut comps: Vec<*mut ffi::opj_image_comp> = Vec::new();
     let comps_len = (*jp2_image).numcomps;
     for i in 0..comps_len {
         comps.push((*jp2_image).comps.offset(i as isize));
     }
-    println!("comps.len() = {}", comps.len());
+    //println!("comps.len() = {}", comps.len());
 
-    let mut jp2_info: *mut c_void = mem::zeroed();
+    //let mut jp2_info: *mut c_void = mem::zeroed();
     //ffi::opj_get_cstr_info(&mut jp2_info);
 
-    assert!(comps.len() == 4);
+    if comps.len() > color_convert::MAX_COMPONENTS {
+        ffi::opj_stream_destroy(jp2_stream);
+        ffi::opj_destroy_codec(jp2_codec);
+        ffi::opj_image_destroy(jp2_image);
+        return Err(DecodeError::TooManyComponents(comps.len()));
+    }
     let mut image = DynamicImage::new_rgba8(width, height);
 
     // Copy the pixels.
@@ -185,19 +172,22 @@ unsafe fn load_from_stream(
             let index = (x + y * width) as isize;
 
             let mut values = [0u8, 0, 0, 0];
-            for i in 0..4 {
+            for i in 0..comps.len() {
                 let data = (*comps[i]).data;
-                assert!((*comps[i]).sgnd == 0); // TODO signed numbers?!
+                //assert!((*comps[i]).sgnd == 0); // TODO signed numbers?!
                 let ivalue: u8 = *data.offset(index) as u8;
                 values[i] = ivalue;
             }
 
-            image.unsafe_put_pixel(x, y, image::Rgba { data: values })
+            image.unsafe_put_pixel(x, y, color_space.convert_to_rgba(values))
         }
     }
 
-    Ok(image)
+    ffi::opj_stream_destroy(jp2_stream);
+    ffi::opj_destroy_codec(jp2_codec);
+    ffi::opj_image_destroy(jp2_image);
 
+    Ok(image)
 }
 
 /*
