@@ -14,7 +14,7 @@
 /// You should have received a copy of the GNU General Public License
 /// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use openjp2_sys as ffi;
+use openjpeg2_sys as ffi;
 use std::os::raw::c_void;
 use std::ptr::null_mut;
 use std::ffi::CString;

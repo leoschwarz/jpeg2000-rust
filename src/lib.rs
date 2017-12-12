@@ -15,7 +15,7 @@
 /// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 extern crate image;
 extern crate libc;
-extern crate openjp2_sys;
+extern crate openjpeg2_sys;
 
 pub use self::image::{DynamicImage, ImageResult};
 
