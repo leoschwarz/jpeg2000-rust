@@ -16,6 +16,8 @@
 extern crate image;
 extern crate libc;
 extern crate openjpeg2_sys;
+#[macro_use]
+pub extern crate slog;
 
 pub use self::image::DynamicImage;
 

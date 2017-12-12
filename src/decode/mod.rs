@@ -14,13 +14,13 @@
 /// You should have received a copy of the GNU General Public License
 /// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use error::DecodeError;
+use image::{DynamicImage, GenericImage};
 use openjpeg2_sys as ffi;
+use slog::{self, Logger};
+use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr::null_mut;
-use std::ffi::CString;
-use image::{DynamicImage, GenericImage};
-
-use error::DecodeError;
 
 mod color_convert;
 use self::color_convert::ColorSpaceValue;
@@ -121,6 +121,7 @@ unsafe fn load_from_stream(
     jp2_stream: *mut *mut c_void,
     codec: Codec,
     config: DecodeConfig,
+    logger: Logger,
 ) -> Result<DynamicImage, DecodeError> {
     // Setup the codec.
     let jp2_codec = ffi::opj_create_decompress(codec.to_i32());
@@ -128,9 +129,12 @@ unsafe fn load_from_stream(
         ffi::opj_stream_destroy(jp2_stream);
         return Err(DecodeError::FfiError("Codec instantiation failed."));
     }
-    ffi::opj_set_info_handler(jp2_codec, Some(support::info_handler), null_mut());
-    ffi::opj_set_warning_handler(jp2_codec, Some(support::warning_handler), null_mut());
-    ffi::opj_set_error_handler(jp2_codec, Some(support::error_handler), null_mut());
+    let mut data = support::LogHandlerData::new(logger.clone());
+    let data_ptr: *mut support::LogHandlerData = &mut data;
+    let data_ptr = data_ptr as *mut c_void;
+    ffi::opj_set_info_handler(jp2_codec, Some(support::info_handler), data_ptr);
+    ffi::opj_set_warning_handler(jp2_codec, Some(support::warning_handler), data_ptr);
+    ffi::opj_set_error_handler(jp2_codec, Some(support::error_handler), data_ptr);
 
     // Setup decoder.
     let mut jp2_dparams = get_default_decoder_parameters();
@@ -169,16 +173,12 @@ unsafe fn load_from_stream(
     } else {
         color_space.unwrap()
     };
-    println!("reading color space: {:?}", color_space);
+    info!(logger, "color space: {:?}", color_space);
+    info!(logger, "icc_profile_len: {}", (*jp2_image).icc_profile_len);
 
-    println!("jp2_image: {:?}", *jp2_image);
     let width = (*jp2_image).x1 - (*jp2_image).x0;
     let height = (*jp2_image).y1 - (*jp2_image).y0;
-
-    println!("width: {}, height: {}", width, height);
-
-    //println!("color_space: {:?}", color_space);
-    //println!("icc_profile_len: {}", (*jp2_image).icc_profile_len);
+    info!(logger, "width: {}, height: {}", width, height);
 
     let mut comps: Vec<*mut ffi::opj_image_comp> = Vec::new();
     let comps_len = (*jp2_image).numcomps;
@@ -192,8 +192,7 @@ unsafe fn load_from_stream(
         return Err(DecodeError::TooManyComponents(comps.len()));
     }
     let mut image = DynamicImage::new_rgba8(width, height);
-
-    println!("n_comps: {}", comps.len());
+    info!(logger, "number of components: {}", comps.len());
 
     // Copy the pixels.
     let comp_width = (*comps[0]).w;
@@ -231,10 +230,13 @@ pub fn from_memory(
     buf: &[u8],
     codec: Codec,
     config: DecodeConfig,
+    logger: Option<Logger>,
 ) -> Result<DynamicImage, DecodeError> {
     // TODO: In the future this should not copy the data into a vec but instead take a slice and
     // store a slice in the NdUserdata with appropriate lifetime information.
     let mut userdata = support::NdUserdata::new_input(buf);
+
+    let logger = logger.unwrap_or_else(|| Logger::root(slog::Discard, o!()));
 
     unsafe {
         let stream = ffi::opj_stream_default_create(1);
@@ -246,7 +248,7 @@ pub fn from_memory(
         let userdata_ptr: *mut support::NdUserdata = &mut userdata;
         ffi::opj_stream_set_user_data_length(stream, buf.len() as u64);
         ffi::opj_stream_set_user_data(stream, userdata_ptr as *mut c_void, None);
-        load_from_stream(stream, codec, config)
+        load_from_stream(stream, codec, config, logger)
     }
 }
 
@@ -255,10 +257,13 @@ pub fn from_file<S: Into<String>>(
     file_name: S,
     codec: Codec,
     config: DecodeConfig,
+    logger: Option<Logger>,
 ) -> Result<DynamicImage, DecodeError> {
+    let logger = logger.unwrap_or_else(|| Logger::root(slog::Discard, o!()));
+
     unsafe {
         let f = CString::new(file_name.into())?;
         let jp2_stream = ffi::opj_stream_create_default_file_stream(f.as_ptr(), 1);
-        load_from_stream(jp2_stream, codec, config)
+        load_from_stream(jp2_stream, codec, config, logger)
     }
 }

@@ -13,12 +13,25 @@
 ///
 /// You should have received a copy of the GNU General Public License
 /// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 extern crate image;
 extern crate jpeg2000;
+#[macro_use]
+extern crate slog;
+extern crate slog_async;
+extern crate slog_term;
+
+use jpeg2000::decode::{Codec, ColorSpace, DecodeConfig};
 
 use std::fs::File;
-use jpeg2000::decode::{Codec, ColorSpace, DecodeConfig};
+use slog::Drain;
+
+fn get_logger() -> slog::Logger {
+    let decorator = slog_term::TermDecorator::new().build();
+    let drain = slog_term::CompactFormat::new(decorator).build().fuse();
+    let drain = slog_async::Async::new(drain).build().fuse();
+
+    slog::Logger::root(drain, o!())
+}
 
 fn main() {
     let images = vec![
@@ -34,6 +47,7 @@ fn main() {
         ),
     ];
 
+    let logger = get_logger();
     for (mut data, basename, codec) in images {
         let img = jpeg2000::decode::from_memory(
             &mut data[..],
@@ -42,6 +56,7 @@ fn main() {
                 default_colorspace: Some(ColorSpace::SRGB),
                 discard_level: 0,
             },
+            Some(logger.clone()),
         ).unwrap();
 
         let mut output = File::create(format!("output/{}.png", basename)).unwrap();

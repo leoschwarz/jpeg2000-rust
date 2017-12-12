@@ -16,9 +16,20 @@
 /// You should have received a copy of the GNU General Public License
 /// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::slice;
-use std::os::raw::{c_char, c_void};
+use slog::Logger;
 use std::ffi::CStr;
+use std::os::raw::{c_char, c_void};
+use std::slice;
+
+pub struct LogHandlerData {
+    logger: Logger,
+}
+
+impl LogHandlerData {
+    pub fn new(logger: Logger) -> Self {
+        LogHandlerData { logger: logger }
+    }
+}
 
 pub struct NdUserdata<'a> {
     input_stream: bool,
@@ -122,14 +133,17 @@ pub unsafe extern "C" fn nd_opj_stream_seek_fn(p_nb_bytes: i64, p_user_data: *mu
     }
 }
 
-pub unsafe extern "C" fn info_handler(msg: *const c_char, _: *mut c_void) {
-    println!("OpenJPEG info:  {}", CStr::from_ptr(msg).to_string_lossy());
+pub unsafe extern "C" fn info_handler(msg: *const c_char, p_data: *mut c_void) {
+    let data = p_data as *mut LogHandlerData;
+    info!((*data).logger, "{}", CStr::from_ptr(msg).to_string_lossy());
 }
 
-pub unsafe extern "C" fn warning_handler(msg: *const c_char, _: *mut c_void) {
-    println!("OpenJPEG warn:  {}", CStr::from_ptr(msg).to_string_lossy());
+pub unsafe extern "C" fn warning_handler(msg: *const c_char, p_data: *mut c_void) {
+    let data = p_data as *mut LogHandlerData;
+    warn!((*data).logger, "{}", CStr::from_ptr(msg).to_string_lossy());
 }
 
-pub unsafe extern "C" fn error_handler(msg: *const c_char, _: *mut c_void) {
-    println!("OpenJPEG error: {}", CStr::from_ptr(msg).to_string_lossy());
+pub unsafe extern "C" fn error_handler(msg: *const c_char, p_data: *mut c_void) {
+    let data = p_data as *mut LogHandlerData;
+    error!((*data).logger, "{}", CStr::from_ptr(msg).to_string_lossy());
 }
