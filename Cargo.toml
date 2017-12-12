@@ -2,10 +2,11 @@
 name = "jpeg2000"
 version = "0.1.0"
 authors = ["Leo Schwarz <mail@leoschwarz.com>"]
-license = "GPL3 AND BSD-2-CLAUSE"
+license = "GPL-3.0 AND BSD-2-CLAUSE"
 
 [dependencies]
 image = "0.17.0"
 libc = "0.2.33"
-openjp2-sys = { path = "openjp2-sys", version = "0.1.0" }
+#openjpeg2-sys = { path = "openjpeg2-sys", version = "0.1.0" }
+openjpeg2-sys = "0.1.0"
 

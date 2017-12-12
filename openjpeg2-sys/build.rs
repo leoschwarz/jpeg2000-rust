@@ -33,7 +33,7 @@ fn main() {
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     let include_dir = out_path.join("include/openjpeg-2.3");
-    let library_dir = out_path.join("build/bin");
+    //let library_dir = out_path.join("build/bin");
 
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
