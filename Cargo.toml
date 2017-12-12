@@ -2,7 +2,7 @@
 name = "jpeg2000"
 version = "0.1.0"
 authors = ["Leo Schwarz <mail@leoschwarz.com>"]
-license = "(MIT OR Apache-2.0) AND BSD-2-CLAUSE"
+license = "GPL3 AND BSD-2-CLAUSE"
 
 [dependencies]
 image = "0.17.0"

@@ -1,3 +1,19 @@
+/// jpeg2000: Rust bindings to the OpenJPEG library.
+/// Copyright (C) 2017 Leonardo Schwarz <mail@leoschwarz.com>
+///
+/// This program is free software: you can redistribute it and/or modify
+/// it under the terms of the GNU General Public License as published by
+/// the Free Software Foundation, either version 3 of the License, or
+/// (at your option) any later version.
+///
+/// This program is distributed in the hope that it will be useful,
+/// but WITHOUT ANY WARRANTY; without even the implied warranty of
+/// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+/// GNU General Public License for more details.
+///
+/// You should have received a copy of the GNU General Public License
+/// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 use openjp2_sys as ffi;
 use std::os::raw::c_void;
 use std::ptr::null_mut;
@@ -7,18 +23,37 @@ use image::{DynamicImage, GenericImage};
 use error::DecodeError;
 
 mod color_convert;
-use self::color_convert::{ColorSpace, ColorSpaceValue};
+use self::color_convert::ColorSpaceValue;
+pub use self::color_convert::ColorSpace;
 
-// TODO: in the future remove all mem::uninitialized and mem::zeroed from this crate,
-// I use these as it's quicker to get something running, but they might end up sneaking UB
-// into our code.
+pub struct DecodeConfig {
+    /// Default color space to be used in the case of unspecified values.
+    pub default_colorspace: Option<ColorSpace>,
+    /// The image resolution is effectively divided by 2 to the power of
+    /// the number of discarded levels.
+    pub discard_level: u32,
+}
+
+impl Default for DecodeConfig {
+    fn default() -> Self {
+        DecodeConfig {
+            default_colorspace: None,
+            discard_level: 0,
+        }
+    }
+}
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Codec {
+    /// JPEG-2000 codestream.
     J2K,
+    /// JP2 file format.
     JP2,
+    /// JPP-stream (JPEG 2000, JPIP)
     JPP,
+    /// JPT-stream (JPEG 2000, JPIP)
     JPT,
+    /// JPX file format (JPEG 2000 Part-2)
     JPX,
 }
 
@@ -43,9 +78,8 @@ impl ColorSpaceValue {
             ffi::COLOR_SPACE_OPJ_CLRSPC_GRAY => ColorSpaceValue::GRAY,
             ffi::COLOR_SPACE_OPJ_CLRSPC_SRGB => ColorSpaceValue::SRGB,
             ffi::COLOR_SPACE_OPJ_CLRSPC_SYCC => ColorSpaceValue::SYCC,
-            ffi::COLOR_SPACE_OPJ_CLRSPC_UNKNOWN => ColorSpaceValue::Unknown(val),
             ffi::COLOR_SPACE_OPJ_CLRSPC_UNSPECIFIED => ColorSpaceValue::Unspecified,
-            _ => ColorSpaceValue::Unknown(val),
+            ffi::COLOR_SPACE_OPJ_CLRSPC_UNKNOWN | _ => ColorSpaceValue::Unknown(val),
         }
     }
 }
@@ -78,10 +112,17 @@ unsafe fn get_default_decoder_parameters() -> ffi::opj_dparameters {
     jp2_dparams
 }
 
+/// Divide by 2 to the power of b and round upwards.
+#[inline]
+fn ceil_div_pow2(a: u32, b: u32) -> u32 {
+    (a + (1 << b) - 1) >> b
+}
+
 // jp2_stream: this function will take care of deleting this at the end.
 unsafe fn load_from_stream(
     jp2_stream: *mut *mut c_void,
     codec: Codec,
+    config: DecodeConfig,
 ) -> Result<DynamicImage, DecodeError> {
     // Setup the decoder.
     let jp2_codec = ffi::opj_create_decompress(codec.to_i32());
@@ -89,7 +130,9 @@ unsafe fn load_from_stream(
         ffi::opj_stream_destroy(jp2_stream);
         return Err(DecodeError::FfiError("Codec instantiation failed."));
     }
+
     let mut jp2_dparams = get_default_decoder_parameters();
+    jp2_dparams.cp_reduce = config.discard_level;
     if ffi::opj_setup_decoder(jp2_codec, &mut jp2_dparams) != 1 {
         ffi::opj_stream_destroy(jp2_stream);
         ffi::opj_destroy_codec(jp2_codec);
@@ -126,23 +169,29 @@ unsafe fn load_from_stream(
 
     let color_space_raw = ColorSpaceValue::from_i32((*jp2_image).color_space);
     let color_space = color_space_raw.determined();
-    if color_space.is_none() {
+    let color_space: ColorSpace = if color_space.is_none() {
         // TODO: how to deal with unspecified color space?
         ffi::opj_stream_destroy(jp2_stream);
         ffi::opj_destroy_codec(jp2_codec);
         ffi::opj_image_destroy(jp2_image);
         if color_space_raw == ColorSpaceValue::Unspecified {
-            return Err(DecodeError::UnspecifiedColorSpace);
+            match config.default_colorspace {
+                Some(cspace) => cspace,
+                None => return Err(DecodeError::UnspecifiedColorSpace),
+            }
         } else {
             return Err(DecodeError::UnknownColorSpace);
         }
-    }
-    let color_space: ColorSpace = color_space.unwrap();
+    } else {
+        color_space.unwrap()
+    };
+    println!("reading color space: {:?}", color_space);
 
+    println!("jp2_image: {:?}", *jp2_image);
     let width = (*jp2_image).x1 - (*jp2_image).x0;
     let height = (*jp2_image).y1 - (*jp2_image).y0;
 
-    //println!("width: {}, height: {}", width, height);
+    println!("width: {}, height: {}", width, height);
 
     //println!("color_space: {:?}", color_space);
     //println!("icc_profile_len: {}", (*jp2_image).icc_profile_len);
@@ -153,10 +202,13 @@ unsafe fn load_from_stream(
     for i in 0..comps_len {
         comps.push((*jp2_image).comps.offset(i as isize));
     }
-    //println!("comps.len() = {}", comps.len());
 
-    //let mut jp2_info: *mut c_void = mem::zeroed();
-    //ffi::opj_get_cstr_info(&mut jp2_info);
+    /*
+    use std::mem;
+    let mut jp2_info: *mut c_void = mem::zeroed();
+    ffi::opj_get_cstr_info(&mut jp2_info);
+    println!("jp2_info: {:?}", jp2_info);
+    */
 
     if comps.len() > color_convert::MAX_COMPONENTS {
         ffi::opj_stream_destroy(jp2_stream);
@@ -166,12 +218,23 @@ unsafe fn load_from_stream(
     }
     let mut image = DynamicImage::new_rgba8(width, height);
 
-    // Copy the pixels.
-    for y in 0..height {
-        for x in 0..width {
-            let index = (x + y * width) as isize;
+    println!("n_comps: {}", comps.len());
 
-            let mut values = [0u8, 0, 0, 0];
+    // Copy the pixels.
+    let comp_width = (*comps[0]).w;
+    let factor = (*comps[0]).factor;
+    let width = ceil_div_pow2(width, factor);
+    let height = ceil_div_pow2(height, factor);
+
+    for y in (0..height).rev() {
+        for x in 0..width {
+            //let index = (x + y * width) as isize;
+            let index = (y * comp_width + x) as isize;
+
+            // Note: Initialize the last component value to 255,
+            //       since this will be the alpha channel value in case
+            //       there is actually no transparency.
+            let mut values = [0u8, 0, 0, 255];
             for i in 0..comps.len() {
                 let data = (*comps[i]).data;
                 //assert!((*comps[i]).sgnd == 0); // TODO signed numbers?!
@@ -204,9 +267,9 @@ pub fn load_from_memory(buf: &mut [u8], codec: Codec) -> Result<DynamicImage, De
 */
 
 // TODO: docs
-pub fn load_from_file(fname: CString, codec: Codec) -> Result<DynamicImage, DecodeError> {
+pub fn load_from_file(fname: CString, codec: Codec, config: DecodeConfig) -> Result<DynamicImage, DecodeError> {
     unsafe {
         let jp2_stream = ffi::opj_stream_create_default_file_stream(fname.as_ptr(), 1);
-        load_from_stream(jp2_stream, codec)
+        load_from_stream(jp2_stream, codec, config)
     }
 }
