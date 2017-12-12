@@ -251,13 +251,14 @@ pub fn load_from_memory(
 }
 
 // TODO: docs
-pub fn load_from_file(
-    fname: CString,
+pub fn load_from_file<S: Into<String>>(
+    file_name: S,
     codec: Codec,
     config: DecodeConfig,
 ) -> Result<DynamicImage, DecodeError> {
     unsafe {
-        let jp2_stream = ffi::opj_stream_create_default_file_stream(fname.as_ptr(), 1);
+        let f = CString::new(file_name.into())?;
+        let jp2_stream = ffi::opj_stream_create_default_file_stream(f.as_ptr(), 1);
         load_from_stream(jp2_stream, codec, config)
     }
 }

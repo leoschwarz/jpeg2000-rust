@@ -28,7 +28,7 @@ fn main() {
             },
         ).unwrap();
 
-        let mut output = File::create(format!("{}.png", basename)).unwrap();
+        let mut output = File::create(format!("output/{}.png", basename)).unwrap();
         let _ = img.save(&mut output, image::ImageFormat::PNG);
     }
 }

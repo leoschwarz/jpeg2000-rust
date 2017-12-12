@@ -14,6 +14,9 @@
 /// You should have received a copy of the GNU General Public License
 /// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::error::Error;
+use std::fmt;
+
 #[derive(Debug)]
 pub enum DecodeError {
     /// Weird FFI errors that should never happen
@@ -23,11 +26,40 @@ pub enum DecodeError {
     /// Reading the header failed for some reason.
     ReadHeader,
 
+    /// There was a null byte in the string.
+    NullInString,
+
     /// There were too many components in the supplied file.
     /// If it was a valid file this is a bug in the crate too.
     TooManyComponents(usize),
 
-    // TODO: This should not be a problem in the future.
     UnspecifiedColorSpace,
     UnknownColorSpace,
+}
+
+impl From<::std::ffi::NulError> for DecodeError {
+    fn from(_: ::std::ffi::NulError) -> Self {
+        DecodeError::NullInString
+    }
+}
+
+impl Error for DecodeError {
+    fn description(&self) -> &str {
+        match *self {
+            DecodeError::FfiError(e) => e,
+            DecodeError::ReadHeader => "reading the header failed",
+            DecodeError::NullInString => "there was a null byte in the string",
+            DecodeError::TooManyComponents(_) => {
+                "there were too many components in the supplied file."
+            }
+            DecodeError::UnspecifiedColorSpace => "Color space was not specified.",
+            DecodeError::UnknownColorSpace => "Color space is unknown.",
+        }
+    }
+}
+
+impl fmt::Display for DecodeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.description())
+    }
 }
