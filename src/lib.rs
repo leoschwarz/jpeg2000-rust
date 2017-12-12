@@ -17,7 +17,7 @@ extern crate image;
 extern crate libc;
 extern crate openjpeg2_sys;
 
-pub use self::image::{DynamicImage, ImageResult};
+pub use self::image::DynamicImage;
 
 pub mod decode;
 pub mod error;
