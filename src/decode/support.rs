@@ -20,15 +20,15 @@ use std::slice;
 use std::os::raw::{c_char, c_void};
 use std::ffi::CStr;
 
-pub struct NdUserdata {
+pub struct NdUserdata<'a> {
     input_stream: bool,
     offset: usize,
     output: Vec<u8>,
-    input: Vec<u8>,
+    input: &'a [u8],
 }
 
-impl NdUserdata {
-    pub fn new_input(data: Vec<u8>) -> Self {
+impl<'a> NdUserdata<'a> {
+    pub fn new_input(data: &'a [u8]) -> Self {
         NdUserdata {
             input_stream: true,
             offset: 0,

@@ -18,7 +18,6 @@ use openjp2_sys as ffi;
 use std::os::raw::c_void;
 use std::ptr::null_mut;
 use std::ffi::CString;
-use std::mem;
 use image::{DynamicImage, GenericImage};
 
 use error::DecodeError;
@@ -221,24 +220,21 @@ unsafe fn load_from_stream(
             image.unsafe_put_pixel(x, y, color_space.convert_to_rgba(values))
         }
     }
-    println!("ok");
 
     ffi::opj_destroy_codec(jp2_codec);
     ffi::opj_image_destroy(jp2_image);
-
-    println!("ok2");
 
     Ok(image)
 }
 
 pub fn load_from_memory(
-    buf: &mut [u8],
+    buf: &[u8],
     codec: Codec,
     config: DecodeConfig,
 ) -> Result<DynamicImage, DecodeError> {
     // TODO: In the future this should not copy the data into a vec but instead take a slice and
     // store a slice in the NdUserdata with appropriate lifetime information.
-    let mut userdata = support::NdUserdata::new_input(buf.to_vec());
+    let mut userdata = support::NdUserdata::new_input(buf);
 
     unsafe {
         let stream = ffi::opj_stream_default_create(1);
