@@ -129,6 +129,8 @@ unsafe fn load_from_stream(
         ffi::opj_stream_destroy(jp2_stream);
         return Err(DecodeError::FfiError("Codec instantiation failed."));
     }
+    // TODO: What is actually a sensible key value pair here?
+    let logger = logger.new(o!("function"=>"decode jpeg2000 stream"));
     let mut data = support::LogHandlerData::new(logger.clone());
     let data_ptr: *mut support::LogHandlerData = &mut data;
     let data_ptr = data_ptr as *mut c_void;
