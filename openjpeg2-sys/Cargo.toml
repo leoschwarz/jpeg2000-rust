@@ -4,7 +4,8 @@ version = "0.1.0"
 authors = ["Leo Schwarz <mail@leoschwarz.com>"]
 links = "openjp2"
 build = "build.rs"
-license = "BSD-2-CLAUSE"
+license = "BSD-2-Clause"
+description = "Statically links against OpenJPEG2, used by the jpeg2000 crate."
 repository = "https://github.com/leoschwarz/jpeg2000-rust"
 
 [dependencies]
