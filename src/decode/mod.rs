@@ -18,6 +18,7 @@ use openjp2_sys as ffi;
 use std::os::raw::c_void;
 use std::ptr::null_mut;
 use std::ffi::CString;
+use std::mem;
 use image::{DynamicImage, GenericImage};
 
 use error::DecodeError;
@@ -255,18 +256,29 @@ unsafe fn load_from_stream(
     Ok(image)
 }
 
-/*
-// TODO: Apparently this is still missing https://github.com/uclouvain/openjpeg/issues/972
-pub fn load_from_memory(buf: &mut [u8], codec: Codec) -> Result<DynamicImage, DecodeError> {
+pub fn load_from_memory(
+    buf: &mut [u8],
+    codec: Codec,
+    config: DecodeConfig,
+) -> Result<DynamicImage, DecodeError> {
+    // TODO: In the future this should not copy the data into a vec but instead take a slice and
+    // store a slice in the NdUserdata with appropriate lifetime information.
+    let mut userdata = support::NdUserdata::new_input(buf.to_vec());
+
     unsafe {
-        let jp2_stream = ffi::opj_stream_create(buf.len(), 1);
-        //ffi::opj_stream_set_user_data_length(jp2_stream, buf.len() as u64);
-        ffi::opj_stream_set_user_data(jp2_stream, buf.as_mut_ptr() as *mut c_void, None);
-        ffi::opj_stream_set_read_function(jp2_stream, Some(full_read_buf));
-        load_from_stream(jp2_stream, codec)
+        let stream = ffi::opj_stream_default_create(1);
+        ffi::opj_stream_set_read_function(stream, Some(support::nd_opj_stream_read_fn));
+        ffi::opj_stream_set_write_function(stream, Some(support::nd_opj_stream_write_fn));
+        ffi::opj_stream_set_skip_function(stream, Some(support::nd_opj_stream_skip_fn));
+        ffi::opj_stream_set_seek_function(stream, Some(support::nd_opj_stream_seek_fn));
+
+        let userdata_ptr: *mut support::NdUserdata = &mut userdata;
+        //ffi::opj_stream_set_user_data_length(stream, mem::size_of::<support::NdUserdata>() as u64);
+        ffi::opj_stream_set_user_data_length(stream, buf.len() as u64);
+        ffi::opj_stream_set_user_data(stream, userdata_ptr as *mut c_void, None);
+        load_from_stream(stream, codec, config)
     }
 }
-*/
 
 // TODO: docs
 pub fn load_from_file(

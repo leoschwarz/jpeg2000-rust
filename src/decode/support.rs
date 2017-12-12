@@ -19,7 +19,7 @@
 use std::{mem, slice};
 use std::os::raw::c_void;
 
-struct NdUserdata {
+pub struct NdUserdata {
     input_stream: bool,
     offset: usize,
     length: usize,
@@ -27,7 +27,19 @@ struct NdUserdata {
     input: Vec<u8>,
 }
 
-unsafe extern "C" fn nd_opj_stream_read_fn(
+impl NdUserdata {
+    pub fn new_input(data: Vec<u8>) -> Self {
+        NdUserdata {
+            input_stream: true,
+            offset: 0,
+            length: data.len(),
+            output: Vec::new(),
+            input: data,
+        }
+    }
+}
+
+pub unsafe extern "C" fn nd_opj_stream_read_fn(
     p_buffer: *mut c_void,
     p_nb_bytes: usize,
     p_user_data: *mut c_void,
@@ -59,7 +71,7 @@ unsafe extern "C" fn nd_opj_stream_read_fn(
     n_read
 }
 
-unsafe extern "C" fn nd_opj_stream_write_fn(
+pub unsafe extern "C" fn nd_opj_stream_write_fn(
     p_buffer: *mut c_void,
     p_nb_bytes: usize,
     p_user_data: *mut c_void,
@@ -79,7 +91,7 @@ unsafe extern "C" fn nd_opj_stream_write_fn(
     p_nb_bytes
 }
 
-unsafe extern "C" fn nd_opj_stream_skip_fn(p_nb_bytes: i64, p_user_data: *mut c_void) -> i64 {
+pub unsafe extern "C" fn nd_opj_stream_skip_fn(p_nb_bytes: i64, p_user_data: *mut c_void) -> i64 {
     let userdata = p_user_data as *mut NdUserdata;
     assert!((*userdata).input_stream);
 
@@ -96,7 +108,7 @@ unsafe extern "C" fn nd_opj_stream_skip_fn(p_nb_bytes: i64, p_user_data: *mut c_
     (*userdata).offset as i64
 }
 
-unsafe extern "C" fn nd_opj_stream_seek_fn(p_nb_bytes: i64, p_user_data: *mut c_void) -> bool {
+pub unsafe extern "C" fn nd_opj_stream_seek_fn(p_nb_bytes: i64, p_user_data: *mut c_void) -> i32 {
     let userdata = p_user_data as *mut NdUserdata;
     assert!((*userdata).input_stream);
 
@@ -104,9 +116,9 @@ unsafe extern "C" fn nd_opj_stream_seek_fn(p_nb_bytes: i64, p_user_data: *mut c_
     let n_seek = p_nb_bytes as usize;
 
     if n_seek > n_imgsize {
-        false
+        0
     } else {
         (*userdata).offset = n_seek;
-        true
+        1
     }
 }
