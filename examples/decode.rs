@@ -6,8 +6,16 @@ use jpeg2000::decode::{Codec, ColorSpace, DecodeConfig};
 
 fn main() {
     let images = vec![
-        (include_bytes!("./images/rust_logo.jp2").to_vec(), "rust_logo", Codec::JP2),
-        (include_bytes!("./images/opensim_texture.jp2").to_vec(), "opensim_texture", Codec::J2K)
+        (
+            include_bytes!("./images/rust_logo.jp2").to_vec(),
+            "rust_logo",
+            Codec::JP2,
+        ),
+        (
+            include_bytes!("./images/opensim_texture.jp2").to_vec(),
+            "opensim_texture",
+            Codec::J2K,
+        ),
     ];
 
     for (mut data, basename, codec) in images {

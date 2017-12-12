@@ -16,14 +16,13 @@
 /// You should have received a copy of the GNU General Public License
 /// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::{mem, slice};
+use std::slice;
 use std::os::raw::{c_char, c_void};
 use std::ffi::CStr;
 
 pub struct NdUserdata {
     input_stream: bool,
     offset: usize,
-    length: usize,
     output: Vec<u8>,
     input: Vec<u8>,
 }
@@ -33,7 +32,6 @@ impl NdUserdata {
         NdUserdata {
             input_stream: true,
             offset: 0,
-            length: data.len(),
             output: Vec::new(),
             input: data,
         }
@@ -105,7 +103,7 @@ pub unsafe extern "C" fn nd_opj_stream_skip_fn(p_nb_bytes: i64, p_user_data: *mu
         n_skip = n_byteleft;
     }
 
-    (*userdata).offset += (n_skip as usize);
+    (*userdata).offset += n_skip as usize;
     (*userdata).offset as i64
 }
 

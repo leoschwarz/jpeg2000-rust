@@ -87,8 +87,6 @@ impl ColorSpaceValue {
     }
 }
 
-//extern "C" fn quiet_callback(_: *const c_char, _: *mut c_void) {}
-
 unsafe fn get_default_decoder_parameters() -> ffi::opj_dparameters {
     let mut jp2_dparams = ffi::opj_dparameters {
         cp_reduce: 0,
@@ -125,13 +123,17 @@ unsafe fn load_from_stream(
     codec: Codec,
     config: DecodeConfig,
 ) -> Result<DynamicImage, DecodeError> {
-    // Setup the decoder.
+    // Setup the codec.
     let jp2_codec = ffi::opj_create_decompress(codec.to_i32());
     if jp2_codec.is_null() {
         ffi::opj_stream_destroy(jp2_stream);
         return Err(DecodeError::FfiError("Codec instantiation failed."));
     }
+    ffi::opj_set_info_handler(jp2_codec, Some(support::info_handler), null_mut());
+    ffi::opj_set_warning_handler(jp2_codec, Some(support::warning_handler), null_mut());
+    ffi::opj_set_error_handler(jp2_codec, Some(support::error_handler), null_mut());
 
+    // Setup decoder.
     let mut jp2_dparams = get_default_decoder_parameters();
     jp2_dparams.cp_reduce = config.discard_level;
     if ffi::opj_setup_decoder(jp2_codec, &mut jp2_dparams) != 1 {
@@ -140,22 +142,8 @@ unsafe fn load_from_stream(
         return Err(DecodeError::FfiError("Setting up the decoder failed."));
     }
 
-    ffi::opj_set_info_handler(jp2_codec, Some(support::info_handler), null_mut());
-    ffi::opj_set_warning_handler(jp2_codec, Some(support::warning_handler), null_mut());
-    ffi::opj_set_error_handler(jp2_codec, Some(support::error_handler), null_mut());
-
     // Read header.
-    let mut jp2_image: *mut ffi::opj_image = &mut ffi::opj_image {
-        x0: 0,
-        y0: 0,
-        x1: 0,
-        y1: 0,
-        numcomps: 0,
-        color_space: 0,
-        comps: null_mut(),
-        icc_profile_buf: null_mut(),
-        icc_profile_len: 0,
-    };
+    let mut jp2_image: *mut ffi::opj_image = null_mut();
     if ffi::opj_read_header(jp2_stream, jp2_codec, &mut jp2_image) != 1 {
         ffi::opj_stream_destroy(jp2_stream);
         ffi::opj_destroy_codec(jp2_codec);
@@ -164,20 +152,19 @@ unsafe fn load_from_stream(
 
     // Decode the image.
     ffi::opj_decode(jp2_codec, jp2_stream, jp2_image);
+    ffi::opj_stream_destroy(jp2_stream);
 
     let color_space_raw = ColorSpaceValue::from_i32((*jp2_image).color_space);
     let color_space = color_space_raw.determined();
     let color_space: ColorSpace = if color_space.is_none() {
-        // TODO: how to deal with unspecified color space?
-        ffi::opj_stream_destroy(jp2_stream);
-        ffi::opj_destroy_codec(jp2_codec);
-        ffi::opj_image_destroy(jp2_image);
         if color_space_raw == ColorSpaceValue::Unspecified {
             match config.default_colorspace {
                 Some(cspace) => cspace,
                 None => return Err(DecodeError::UnspecifiedColorSpace),
             }
         } else {
+            ffi::opj_destroy_codec(jp2_codec);
+            ffi::opj_image_destroy(jp2_image);
             return Err(DecodeError::UnknownColorSpace);
         }
     } else {
@@ -193,7 +180,6 @@ unsafe fn load_from_stream(
 
     //println!("color_space: {:?}", color_space);
     //println!("icc_profile_len: {}", (*jp2_image).icc_profile_len);
-    //println!("numcomps: {}", (*jp2_image).numcomps);
 
     let mut comps: Vec<*mut ffi::opj_image_comp> = Vec::new();
     let comps_len = (*jp2_image).numcomps;
@@ -201,15 +187,7 @@ unsafe fn load_from_stream(
         comps.push((*jp2_image).comps.offset(i as isize));
     }
 
-    /*
-    use std::mem;
-    let mut jp2_info: *mut c_void = mem::zeroed();
-    ffi::opj_get_cstr_info(&mut jp2_info);
-    println!("jp2_info: {:?}", jp2_info);
-    */
-
     if comps.len() > color_convert::MAX_COMPONENTS {
-        ffi::opj_stream_destroy(jp2_stream);
         ffi::opj_destroy_codec(jp2_codec);
         ffi::opj_image_destroy(jp2_image);
         return Err(DecodeError::TooManyComponents(comps.len()));
@@ -243,10 +221,12 @@ unsafe fn load_from_stream(
             image.unsafe_put_pixel(x, y, color_space.convert_to_rgba(values))
         }
     }
+    println!("ok");
 
-    ffi::opj_stream_destroy(jp2_stream);
     ffi::opj_destroy_codec(jp2_codec);
     ffi::opj_image_destroy(jp2_image);
+
+    println!("ok2");
 
     Ok(image)
 }
@@ -268,7 +248,6 @@ pub fn load_from_memory(
         ffi::opj_stream_set_seek_function(stream, Some(support::nd_opj_stream_seek_fn));
 
         let userdata_ptr: *mut support::NdUserdata = &mut userdata;
-        //ffi::opj_stream_set_user_data_length(stream, mem::size_of::<support::NdUserdata>() as u64);
         ffi::opj_stream_set_user_data_length(stream, buf.len() as u64);
         ffi::opj_stream_set_user_data(stream, userdata_ptr as *mut c_void, None);
         load_from_stream(stream, codec, config)
