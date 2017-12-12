@@ -13,12 +13,11 @@
 ///
 /// You should have received a copy of the GNU General Public License
 /// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 extern crate image;
 extern crate libc;
 extern crate openjp2_sys;
 
-pub use self::image::{ImageResult, DynamicImage};
+pub use self::image::{DynamicImage, ImageResult};
 
 pub mod decode;
 pub mod error;

@@ -48,8 +48,7 @@ impl ColorSpaceValue {
             ColorSpaceValue::GRAY => Some(ColorSpace::GRAY),
             ColorSpaceValue::SRGB => Some(ColorSpace::SRGB),
             ColorSpaceValue::SYCC => Some(ColorSpace::SYCC),
-            ColorSpaceValue::Unknown(_) |
-            ColorSpaceValue::Unspecified => None,
+            ColorSpaceValue::Unknown(_) | ColorSpaceValue::Unspecified => None,
         }
     }
 }

@@ -269,7 +269,11 @@ pub fn load_from_memory(buf: &mut [u8], codec: Codec) -> Result<DynamicImage, De
 */
 
 // TODO: docs
-pub fn load_from_file(fname: CString, codec: Codec, config: DecodeConfig) -> Result<DynamicImage, DecodeError> {
+pub fn load_from_file(
+    fname: CString,
+    codec: Codec,
+    config: DecodeConfig,
+) -> Result<DynamicImage, DecodeError> {
     unsafe {
         let jp2_stream = ffi::opj_stream_create_default_file_stream(fname.as_ptr(), 1);
         load_from_stream(jp2_stream, codec, config)
