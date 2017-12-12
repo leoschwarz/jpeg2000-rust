@@ -2,7 +2,7 @@
 name = "jpeg2000"
 version = "0.1.0"
 authors = ["Leo Schwarz <mail@leoschwarz.com>"]
-license = "GPL-3.0 AND BSD-2-CLAUSE"
+license = "GPL-3.0"
 description = "Rust bindings to OpenJPEG"
 repository = "https://github.com/leoschwarz/jpeg2000-rust"
 
