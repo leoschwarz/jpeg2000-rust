@@ -26,6 +26,8 @@ mod color_convert;
 use self::color_convert::ColorSpaceValue;
 pub use self::color_convert::ColorSpace;
 
+mod support;
+
 pub struct DecodeConfig {
     /// Default color space to be used in the case of unspecified values.
     pub default_colorspace: Option<ColorSpace>,
