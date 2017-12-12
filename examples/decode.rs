@@ -35,7 +35,7 @@ fn main() {
     ];
 
     for (mut data, basename, codec) in images {
-        let img = jpeg2000::decode::load_from_memory(
+        let img = jpeg2000::decode::from_memory(
             &mut data[..],
             codec,
             DecodeConfig {

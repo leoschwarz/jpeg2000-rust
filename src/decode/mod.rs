@@ -227,7 +227,7 @@ unsafe fn load_from_stream(
     Ok(image)
 }
 
-pub fn load_from_memory(
+pub fn from_memory(
     buf: &[u8],
     codec: Codec,
     config: DecodeConfig,
@@ -251,7 +251,7 @@ pub fn load_from_memory(
 }
 
 // TODO: docs
-pub fn load_from_file<S: Into<String>>(
+pub fn from_file<S: Into<String>>(
     file_name: S,
     codec: Codec,
     config: DecodeConfig,
