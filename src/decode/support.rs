@@ -17,7 +17,8 @@
 /// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::{mem, slice};
-use std::os::raw::c_void;
+use std::os::raw::{c_char, c_void};
+use std::ffi::CStr;
 
 pub struct NdUserdata {
     input_stream: bool,
@@ -121,4 +122,16 @@ pub unsafe extern "C" fn nd_opj_stream_seek_fn(p_nb_bytes: i64, p_user_data: *mu
         (*userdata).offset = n_seek;
         1
     }
+}
+
+pub unsafe extern "C" fn info_handler(msg: *const c_char, _: *mut c_void) {
+    println!("OpenJPEG info:  {}", CStr::from_ptr(msg).to_string_lossy());
+}
+
+pub unsafe extern "C" fn warning_handler(msg: *const c_char, _: *mut c_void) {
+    println!("OpenJPEG warn:  {}", CStr::from_ptr(msg).to_string_lossy());
+}
+
+pub unsafe extern "C" fn error_handler(msg: *const c_char, _: *mut c_void) {
+    println!("OpenJPEG error: {}", CStr::from_ptr(msg).to_string_lossy());
 }

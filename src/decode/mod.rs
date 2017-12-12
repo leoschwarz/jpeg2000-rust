@@ -87,9 +87,7 @@ impl ColorSpaceValue {
     }
 }
 
-/*
-extern "C" fn quiet_callback(_: *const c_char, _: *mut c_void) {}
-*/
+//extern "C" fn quiet_callback(_: *const c_char, _: *mut c_void) {}
 
 unsafe fn get_default_decoder_parameters() -> ffi::opj_dparameters {
     let mut jp2_dparams = ffi::opj_dparameters {
@@ -142,12 +140,9 @@ unsafe fn load_from_stream(
         return Err(DecodeError::FfiError("Setting up the decoder failed."));
     }
 
-    /*
-    // Set quiet callbacks.
-    ffi::opj_set_info_handler(jp2_codec, Some(quiet_callback), null_mut());
-    ffi::opj_set_warning_handler(jp2_codec, Some(quiet_callback), null_mut());
-    ffi::opj_set_error_handler(jp2_codec, Some(quiet_callback), null_mut());
-    */
+    ffi::opj_set_info_handler(jp2_codec, Some(support::info_handler), null_mut());
+    ffi::opj_set_warning_handler(jp2_codec, Some(support::warning_handler), null_mut());
+    ffi::opj_set_error_handler(jp2_codec, Some(support::error_handler), null_mut());
 
     // Read header.
     let mut jp2_image: *mut ffi::opj_image = &mut ffi::opj_image {
