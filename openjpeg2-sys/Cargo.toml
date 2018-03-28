@@ -11,6 +11,6 @@ repository = "https://github.com/leoschwarz/jpeg2000-rust"
 [dependencies]
 
 [build-dependencies]
-bindgen = "0.32.0"
+bindgen = "0.35.0"
 cmake = "0.1.29"
 gcc = "0.3.54"
