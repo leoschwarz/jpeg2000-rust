@@ -1,6 +1,6 @@
 [package]
 name = "openjpeg2-sys"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Leo Schwarz <mail@leoschwarz.com>"]
 links = "openjp2"
 build = "build.rs"
