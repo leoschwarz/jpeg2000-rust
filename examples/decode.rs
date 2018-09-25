@@ -22,7 +22,6 @@ extern crate slog_term;
 
 use jpeg2000::decode::{Codec, ColorSpace, DecodeConfig};
 
-use std::fs::File;
 use slog::Drain;
 
 fn get_logger() -> slog::Logger {
@@ -59,7 +58,6 @@ fn main() {
             Some(logger.clone()),
         ).unwrap();
 
-        let mut output = File::create(format!("output/{}.png", basename)).unwrap();
-        let _ = img.save(&mut output, image::ImageFormat::PNG);
+        img.save(format!("output/{}.png", basename)).unwrap();
     }
 }
